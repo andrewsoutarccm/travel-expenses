@@ -1,4 +1,4 @@
-import com.andrewsoutar.cmp128.Utilities;
+import com.andrewsoutar.Utilities;
 
 public class Main {
     public static void main (String... args) {
