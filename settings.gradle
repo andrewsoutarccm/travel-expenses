@@ -1,2 +1,2 @@
-rootProject.name = 'project-name-here'
+rootProject.name = 'travel-expenses'
 include 'utilities'
