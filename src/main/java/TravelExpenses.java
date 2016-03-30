@@ -5,6 +5,8 @@ import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.math.BigDecimal;
+import java.text.NumberFormat;
 import java.util.LinkedList;
 
 import javax.swing.JButton;
@@ -16,6 +18,13 @@ import javax.swing.JTextField;
 
 public class TravelExpenses extends JFrame {
     private static final long serialVersionUID = 0L;
+
+    private static final BigDecimal
+        MEALS = new BigDecimal ("37.00"),
+        COST_PER_MILE = new BigDecimal ("0.27"),
+        PARKING_MAX = new BigDecimal ("10.00"),
+        TAXI_MAX = new BigDecimal ("20.00"),
+        LODGING_MAX = new BigDecimal ("95.00");
 
     private final LinkedList <LabeledTextField> fields = new LinkedList <> ();
     private final JPanel fieldPanel;
@@ -49,11 +58,21 @@ public class TravelExpenses extends JFrame {
             field.setEditable (editable);
         }
 
-        public int getValue () throws UserCancelException {
+        @SuppressWarnings("unchecked")
+        public <T extends Number> T getValue (Class <T> type)
+            throws UserCancelException {
             while (true) {
                 try {
-                    int value = Integer.parseInt (field.getText ());
-                    if (value >= 0) {
+                    T value;
+                    if (type == Integer.class) {
+                        value = (T) new Integer (field.getText ());
+                    } else if (type == BigDecimal.class) {
+                        value = (T) new BigDecimal (field.getText ());
+                    } else {
+                        throw (new RuntimeException
+                               ("Don't know how to convert to " + type));
+                    }
+                    if (value.intValue () >= 0) {
                         return (value);
                     }
                 } catch (NumberFormatException ignored) {};
@@ -96,28 +115,23 @@ public class TravelExpenses extends JFrame {
         contentPane.add (buttonPanel, BorderLayout.SOUTH);
         buttonPanel.setLayout (new FlowLayout ());
 
-        JButton reset = new JButton ("Reset");
-        reset.addActionListener (new ActionListener () {
+        JButton resetButton = new JButton ("Reset");
+        resetButton.addActionListener (new ActionListener () {
                 public void actionPerformed (ActionEvent e) {
                     for (LabeledTextField field : fields) {
                         field.reset ();
                     }
                 }
             });
-        buttonPanel.add (reset);
-        JButton calculate = new JButton ("Calculate");
-        calculate.addActionListener (new ActionListener () {
+        buttonPanel.add (resetButton);
+        JButton calculateButton = new JButton ("Calculate");
+        calculateButton.addActionListener (new ActionListener () {
                 public void actionPerformed (ActionEvent e) {
                     for (LabeledTextField field : fields) {
                         field.setEditable (false);
                     }
                     try {
-                        int days = daysField.getValue ();
-                        JOptionPane.showMessageDialog
-                            (null, String.format ("Total Expenses : %s%n" +
-                                                  "Allowable Expenses : %s%n" +
-                                                  "Amount to be paid back: %s",
-                                                  0, 0, 0));
+                        JOptionPane.showMessageDialog (null, calculate ());
                     } catch (UserCancelException cancel) {
                         return;
                     } finally {
@@ -127,8 +141,63 @@ public class TravelExpenses extends JFrame {
                     }
                 }
             });
-        buttonPanel.add (calculate);
+        buttonPanel.add (calculateButton);
 
         pack ();
+    }
+
+    private String calculate() throws UserCancelException {
+        int days = daysField.getValue (Integer.class);
+        BigDecimal daysBD = new BigDecimal (days);
+        BigDecimal
+            airfare = airfareField.getValue (BigDecimal.class),
+            rental = rentalField.getValue (BigDecimal.class),
+            miles = milesField.getValue (BigDecimal.class),
+            parking = parkingField.getValue (BigDecimal.class),
+            taxi = taxiField.getValue (BigDecimal.class),
+            registration = registrationField.getValue (BigDecimal.class),
+            lodging = lodgingField.getValue (BigDecimal.class);
+
+        BigDecimal total =
+            MEALS.multiply (daysBD)
+            .add (airfare)
+            .add (rental)
+            .add (COST_PER_MILE.multiply (miles))
+            .add (parking)
+            .add (taxi)
+            .add (registration)
+            .add (lodging.multiply (daysBD));
+
+        BigDecimal allowable =
+            MEALS.multiply (daysBD)
+            .add (airfare)
+            .add (rental)
+            .add (rental.compareTo (BigDecimal.ZERO) > 0
+                  ? BigDecimal.ZERO
+                  : COST_PER_MILE.multiply (miles))
+            .add (parking.compareTo (BigDecimal.ZERO) > 0
+                  ? PARKING_MAX.multiply (daysBD)
+                  : BigDecimal.ZERO)
+            .add (taxi.compareTo (BigDecimal.ZERO) > 0
+                  ? TAXI_MAX.multiply (daysBD)
+                  : BigDecimal.ZERO)
+            .add (registration)
+            .add (lodging.compareTo (BigDecimal.ZERO) > 0
+                  ? LODGING_MAX.multiply (daysBD)
+                  : BigDecimal.ZERO);
+
+        BigDecimal difference = total.subtract (allowable);
+
+        NumberFormat currency = NumberFormat.getCurrencyInstance ();
+
+        return (String.format ("Total Expenses : %s%n" +
+                               "Allowable Expenses : %s%n" +
+                               "%s : %s",
+                               currency.format (total),
+                               currency.format (allowable),
+                               difference.compareTo (BigDecimal.ZERO) > 0
+                               ? "Amount to be paid back"
+                               : "Amount saved",
+                               currency.format (difference.abs ())));
     }
 }
